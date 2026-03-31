@@ -21,16 +21,18 @@ import {
    COLE AQUI O SEU FIREBASE CONFIG
 ===================================================== */
 const firebaseConfig = {
-  apiKey: "COLE_AQUI",
-  authDomain: "COLE_AQUI",
-  projectId: "COLE_AQUI",
-  storageBucket: "COLE_AQUI",
-  messagingSenderId: "COLE_AQUI",
-  appId: "COLE_AQUI"
+  apiKey: "AIzaSyBPHgHW64rqOKVSrcCdpMGp_9yRacxIPnU",
+  authDomain: "atendimento-142ff.firebaseapp.com",
+  projectId: "atendimento-142ff",
+  storageBucket: "atendimento-142ff.firebasestorage.app",
+  messagingSenderId: "330549130188",
+  appId: "1:330549130188:web:26c877274f5ccc2b9aa369",
+  measurementId: "G-HBK54RTTMN"
 };
 
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const analytics = getAnalytics(app);
 
 /* =====================================================
    CONFIG
