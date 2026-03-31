@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  />
+  <title>Central de Atendimento</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- ENTRADA -->
+    <section id="welcomeScreen" class="welcome-screen">
+      <div class="welcome-card">
+        <div class="brand-block">
+          <span class="brand-pill">Atendimento Online</span>
+          <h1>Bem-vindo ao chat</h1>
+          <p>
+            Digite seu nome de usuário para entrar na sala e conversar com o suporte
+            e com outros participantes.
+          </p>
+        </div>
+
+        <form id="usernameForm" class="welcome-form">
+          <label for="usernameInput">Nome de usuário</label>
+          <input
+            id="usernameInput"
+            type="text"
+            maxlength="24"
+            placeholder="Ex.: Maria, João, Cliente123"
+            autocomplete="off"
+          />
+          <button type="submit">Entrar no chat</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- APP -->
+    <main id="chatApp" class="chat-app hidden">
+      <header class="topbar">
+        <div class="topbar-left">
+          <div class="logo-mark">A</div>
+          <div>
+            <h2>Central de Atendimento</h2>
+            <p id="roomStatus">Sala pública ativa</p>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <div class="user-chip">
+            <span class="user-chip-label">Você:</span>
+            <strong id="currentUserLabel">-</strong>
+          </div>
+          <button id="mobileSidebarToggle" class="icon-btn" aria-label="Abrir painel lateral">
+            ☰
+          </button>
+        </div>
+      </header>
+
+      <section class="chat-layout">
+        <!-- ÁREA PRINCIPAL -->
+        <section class="chat-main">
+          <div class="conversation-header">
+            <div class="conversation-tabs" id="conversationTabs">
+              <button class="tab active" data-conversation-type="publico" data-thread-id="public-room">
+                Público
+              </button>
+            </div>
+
+            <div class="conversation-meta">
+              <span id="conversationTitle">Sala pública</span>
+            </div>
+          </div>
+
+          <div id="messagesContainer" class="messages-container">
+            <div class="empty-state">
+              <h3>Nenhuma mensagem ainda</h3>
+              <p>Quando alguém enviar algo, as mensagens aparecerão aqui em tempo real.</p>
+            </div>
+          </div>
+
+          <form id="messageForm" class="message-form">
+            <div class="message-input-wrap">
+              <textarea
+                id="messageInput"
+                rows="1"
+                maxlength="1000"
+                placeholder="Digite sua mensagem aqui..."
+              ></textarea>
+            </div>
+            <button id="sendBtn" type="submit" class="send-btn">Enviar</button>
+          </form>
+        </section>
+
+        <!-- SIDEBAR -->
+        <aside id="sidebar" class="chat-sidebar">
+          <div class="sidebar-card sidebar-users">
+            <div class="sidebar-title-row">
+              <h3>Usuários</h3>
+              <span id="onlineCount" class="badge-count">0</span>
+            </div>
+
+            <div class="support-highlight" id="momCard" data-user-id="mom-support">
+              <div class="support-avatar">M</div>
+              <div class="support-info">
+                <strong>Mãe / Suporte</strong>
+                <span>Atendimento principal</span>
+              </div>
+              <button class="mini-action-btn" id="momActionBtn" type="button">⋮</button>
+            </div>
+
+            <div id="usersList" class="user-list"></div>
+          </div>
+
+          <div class="sidebar-card sidebar-switcher">
+            <button class="side-tab active" data-side-tab="usuarios">Usuários</button>
+            <button class="side-tab" data-side-tab="amigos">Amigos</button>
+          </div>
+
+          <div class="sidebar-card sidebar-panel active" id="usuariosPanel">
+            <div class="panel-inner">
+              <p class="panel-hint">Clique em um usuário para abrir opções.</p>
+            </div>
+          </div>
+
+          <div class="sidebar-card sidebar-panel" id="amigosPanel">
+            <div id="friendsList" class="friends-list empty-list">
+              Nenhum amigo adicionado ainda.
+            </div>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <!-- MENU USUÁRIOS -->
+    <div id="userActionMenu" class="context-menu hidden">
+      <button id="startPrivateChatBtn" type="button">Chat privado</button>
+      <button id="addFriendBtn" type="button">Adicionar aos amigos</button>
+    </div>
+
+    <!-- MENU AMIGOS -->
+    <div id="friendActionMenu" class="context-menu hidden">
+      <button id="friendPrivateChatBtn" type="button">Chamar no privado</button>
+      <button id="removeFriendBtn" type="button">Remover dos amigos</button>
+    </div>
+
+    <!-- OVERLAY MOBILE -->
+    <div id="mobileSidebarOverlay" class="mobile-sidebar-overlay hidden"></div>
+  </div>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>
