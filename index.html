@@ -19,16 +19,20 @@
 </head>
 <body>
   <div class="app-shell">
-    <!-- ENTRADA -->
     <section id="welcomeScreen" class="welcome-screen">
       <div class="welcome-card">
         <div class="brand-block">
           <span class="brand-pill">Atendimento Online</span>
           <h1>Bem-vindo ao chat</h1>
           <p>
-            Digite seu nome de usuário para entrar na sala e conversar com o suporte
-            e com outros participantes.
+            Entre como cliente com seu nome de usuário ou, se for a atendente,
+            entre com email e senha.
           </p>
+        </div>
+
+        <div class="welcome-switch">
+          <button id="openClientModeBtn" class="switch-btn active" type="button">Cliente</button>
+          <button id="openSupportModeBtn" class="switch-btn" type="button">Suporte</button>
         </div>
 
         <form id="usernameForm" class="welcome-form">
@@ -42,10 +46,29 @@
           />
           <button type="submit">Entrar no chat</button>
         </form>
+
+        <form id="supportLoginForm" class="welcome-form hidden">
+          <label for="supportEmailInput">Email</label>
+          <input
+            id="supportEmailInput"
+            type="email"
+            placeholder="Digite o email do suporte"
+            autocomplete="email"
+          />
+
+          <label for="supportPasswordInput">Senha</label>
+          <input
+            id="supportPasswordInput"
+            type="password"
+            placeholder="Digite a senha"
+            autocomplete="current-password"
+          />
+
+          <button type="submit">Entrar como suporte</button>
+        </form>
       </div>
     </section>
 
-    <!-- APP -->
     <main id="chatApp" class="chat-app hidden">
       <header class="topbar">
         <div class="topbar-left">
@@ -61,6 +84,7 @@
             <span class="user-chip-label">Você:</span>
             <strong id="currentUserLabel">-</strong>
           </div>
+          <button id="logoutBtn" class="logout-btn" type="button">Sair</button>
           <button id="mobileSidebarToggle" class="icon-btn" aria-label="Abrir painel lateral">
             ☰
           </button>
@@ -68,11 +92,16 @@
       </header>
 
       <section class="chat-layout">
-        <!-- ÁREA PRINCIPAL -->
         <section class="chat-main">
           <div class="conversation-header">
             <div class="conversation-tabs" id="conversationTabs">
-              <button class="tab active" data-conversation-type="publico" data-thread-id="public-room">
+              <button
+                class="tab active"
+                type="button"
+                data-conversation-type="publico"
+                data-thread-id="public-room"
+                data-title="Sala pública"
+              >
                 Público
               </button>
             </div>
@@ -102,7 +131,6 @@
           </form>
         </section>
 
-        <!-- SIDEBAR -->
         <aside id="sidebar" class="chat-sidebar">
           <div class="sidebar-card sidebar-users">
             <div class="sidebar-title-row">
@@ -123,8 +151,8 @@
           </div>
 
           <div class="sidebar-card sidebar-switcher">
-            <button class="side-tab active" data-side-tab="usuarios">Usuários</button>
-            <button class="side-tab" data-side-tab="amigos">Amigos</button>
+            <button class="side-tab active" type="button" data-side-tab="usuarios">Usuários</button>
+            <button class="side-tab" type="button" data-side-tab="amigos">Amigos</button>
           </div>
 
           <div class="sidebar-card sidebar-panel active" id="usuariosPanel">
@@ -142,19 +170,16 @@
       </section>
     </main>
 
-    <!-- MENU USUÁRIOS -->
     <div id="userActionMenu" class="context-menu hidden">
       <button id="startPrivateChatBtn" type="button">Chat privado</button>
       <button id="addFriendBtn" type="button">Adicionar aos amigos</button>
     </div>
 
-    <!-- MENU AMIGOS -->
     <div id="friendActionMenu" class="context-menu hidden">
       <button id="friendPrivateChatBtn" type="button">Chamar no privado</button>
       <button id="removeFriendBtn" type="button">Remover dos amigos</button>
     </div>
 
-    <!-- OVERLAY MOBILE -->
     <div id="mobileSidebarOverlay" class="mobile-sidebar-overlay hidden"></div>
   </div>
 
