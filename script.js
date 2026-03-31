@@ -1,12 +1,16 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
+  getAuth,
+  signInWithEmailAndPassword,
+  signOut
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import {
   getFirestore,
   collection,
   doc,
   setDoc,
   addDoc,
   getDoc,
-  getDocs,
   deleteDoc,
   updateDoc,
   serverTimestamp,
@@ -18,7 +22,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 /* =====================================================
-   COLE AQUI O SEU FIREBASE CONFIG
+   FIREBASE CONFIG
 ===================================================== */
 const firebaseConfig = {
   apiKey: "AIzaSyBPHgHW64rqOKVSrcCdpMGp_9yRacxIPnU",
@@ -31,12 +35,17 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
 
 /* =====================================================
-   CONFIG
+   EMAIL REAL DA SUA MÃE
+   coloque exatamente o mesmo email criado no Authentication
 ===================================================== */
+const SUPPORT_EMAIL = "cleanpro2507@gmail.com";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
 const SUPPORT_USER = {
   id: "mom-support",
   username: "Mãe / Suporte",
@@ -44,13 +53,15 @@ const SUPPORT_USER = {
   status: "online"
 };
 
+const PUBLIC_CONVERSATION = {
+  type: "publico",
+  threadId: "public-room",
+  title: "Sala pública"
+};
+
 const state = {
   currentUser: null,
-  currentConversation: {
-    type: "publico",
-    threadId: "public-room",
-    title: "Sala pública"
-  },
+  currentConversation: { ...PUBLIC_CONVERSATION },
   selectedActionUser: null,
   selectedFriendUser: null,
   unsubscribeMessages: null,
@@ -63,10 +74,19 @@ const state = {
 ===================================================== */
 const welcomeScreen = document.getElementById("welcomeScreen");
 const chatApp = document.getElementById("chatApp");
+
+const openClientModeBtn = document.getElementById("openClientModeBtn");
+const openSupportModeBtn = document.getElementById("openSupportModeBtn");
 const usernameForm = document.getElementById("usernameForm");
+const supportLoginForm = document.getElementById("supportLoginForm");
+
 const usernameInput = document.getElementById("usernameInput");
+const supportEmailInput = document.getElementById("supportEmailInput");
+const supportPasswordInput = document.getElementById("supportPasswordInput");
+
 const currentUserLabel = document.getElementById("currentUserLabel");
 const roomStatus = document.getElementById("roomStatus");
+const logoutBtn = document.getElementById("logoutBtn");
 
 const messagesContainer = document.getElementById("messagesContainer");
 const messageForm = document.getElementById("messageForm");
@@ -102,20 +122,11 @@ const mobileSidebarOverlay = document.getElementById("mobileSidebarOverlay");
    UTILITÁRIOS
 ===================================================== */
 function sanitizeUsername(name) {
-  return name
-    .trim()
-    .replace(/\s+/g, " ")
-    .replace(/[<>]/g, "")
-    .slice(0, 24);
+  return name.trim().replace(/\s+/g, " ").replace(/[<>]/g, "").slice(0, 24);
 }
 
 function generateUserId() {
-  const saved = localStorage.getItem("support_chat_uid");
-  if (saved) return saved;
-
-  const uid = `u_${crypto.randomUUID()}`;
-  localStorage.setItem("support_chat_uid", uid);
-  return uid;
+  return `u_${crypto.randomUUID()}`;
 }
 
 function getInitials(name) {
@@ -136,13 +147,23 @@ function formatTime(timestamp) {
   }).format(date);
 }
 
-function scrollMessagesToBottom() {
-  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
 }
 
 function autoResizeTextarea() {
   messageInput.style.height = "auto";
   messageInput.style.height = `${Math.min(messageInput.scrollHeight, 180)}px`;
+}
+
+function scrollMessagesToBottom() {
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function buildPrivateThreadId(userA, userB) {
+  return [userA, userB].sort().join("__");
 }
 
 function closeAllMenus() {
@@ -168,10 +189,7 @@ function openFriendMenu(x, y, user) {
   friendActionMenu.classList.remove("hidden");
 }
 
-function setEmptyMessagesState(
-  title = "Nenhuma mensagem ainda",
-  text = "Quando alguém enviar algo, as mensagens aparecerão aqui em tempo real."
-) {
+function setEmptyMessagesState(title, text) {
   messagesContainer.innerHTML = `
     <div class="empty-state">
       <h3>${title}</h3>
@@ -180,18 +198,121 @@ function setEmptyMessagesState(
   `;
 }
 
-function buildPrivateThreadId(userA, userB) {
-  return [userA, userB].sort().join("__");
+function getEmptyStateByConversation() {
+  if (state.currentConversation.type === "privado") {
+    return {
+      title: "Nenhuma mensagem privada ainda",
+      text: "Envie a primeira mensagem para iniciar esta conversa privada."
+    };
+  }
+
+  return {
+    title: "Nenhuma mensagem ainda",
+    text: "Quando alguém enviar algo, as mensagens aparecerão aqui em tempo real."
+  };
 }
 
-function escapeHtml(text) {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
+function showChat() {
+  currentUserLabel.textContent = state.currentUser?.username || "-";
+  welcomeScreen.classList.add("hidden");
+  chatApp.classList.remove("hidden");
+}
+
+function showWelcome() {
+  chatApp.classList.add("hidden");
+  welcomeScreen.classList.remove("hidden");
+}
+
+function setRoomHeader() {
+  const { type, title } = state.currentConversation;
+  conversationTitle.textContent = title;
+  roomStatus.textContent =
+    type === "publico" ? "Sala pública ativa" : `Chat privado com ${title}`;
+}
+
+function activateConversationTab(threadId) {
+  [...conversationTabs.querySelectorAll(".tab")].forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.threadId === threadId);
+  });
+}
+
+function addTabClickHandler(tab) {
+  tab.addEventListener("click", () => {
+    switchConversation({
+      type: tab.dataset.conversationType,
+      threadId: tab.dataset.threadId,
+      title: tab.dataset.title || tab.textContent.trim()
+    });
+  });
+}
+
+function ensurePublicTabHandler() {
+  const publicTab = conversationTabs.querySelector('[data-thread-id="public-room"]');
+  if (publicTab && !publicTab.dataset.bound) {
+    addTabClickHandler(publicTab);
+    publicTab.dataset.bound = "true";
+  }
+}
+
+function createConversationTab({ type, threadId, title }) {
+  const existing = conversationTabs.querySelector(`[data-thread-id="${threadId}"]`);
+  if (existing) return existing;
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = `tab ${type === "privado" ? "private-tab" : ""}`;
+  btn.dataset.conversationType = type;
+  btn.dataset.threadId = threadId;
+  btn.dataset.title = title;
+  btn.textContent = type === "publico" ? "Público" : title;
+
+  addTabClickHandler(btn);
+  btn.dataset.bound = "true";
+  conversationTabs.appendChild(btn);
+  return btn;
+}
+
+function setMode(mode) {
+  const isClient = mode === "client";
+  openClientModeBtn.classList.toggle("active", isClient);
+  openSupportModeBtn.classList.toggle("active", !isClient);
+  usernameForm.classList.toggle("hidden", !isClient);
+  supportLoginForm.classList.toggle("hidden", isClient);
+}
+
+function resetAppStateUi() {
+  [...conversationTabs.querySelectorAll(".tab")].forEach((tab, index) => {
+    if (index > 0) tab.remove();
+  });
+
+  switchConversation({ ...PUBLIC_CONVERSATION });
+  messagesContainer.innerHTML = "";
+  setEmptyMessagesState("Nenhuma mensagem ainda", "Quando alguém enviar algo, as mensagens aparecerão aqui em tempo real.");
+}
+
+function cleanupRealtimeListeners() {
+  if (state.unsubscribeMessages) {
+    state.unsubscribeMessages();
+    state.unsubscribeMessages = null;
+  }
+  if (state.unsubscribeUsers) {
+    state.unsubscribeUsers();
+    state.unsubscribeUsers = null;
+  }
+  if (state.unsubscribeFriends) {
+    state.unsubscribeFriends();
+    state.unsubscribeFriends = null;
+  }
 }
 
 /* =====================================================
-   ENTRADA
+   MODOS DE ENTRADA
+===================================================== */
+openClientModeBtn.addEventListener("click", () => setMode("client"));
+openSupportModeBtn.addEventListener("click", () => setMode("support"));
+
+/* =====================================================
+   ENTRADA CLIENTE
 ===================================================== */
 usernameForm.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -203,94 +324,91 @@ usernameForm.addEventListener("submit", async (e) => {
     return;
   }
 
-  const uid = generateUserId();
-
   state.currentUser = {
-    id: uid,
+    id: generateUserId(),
     username,
     role: "user",
-    status: "online"
+    status: "online",
+    isSupportAuth: false
   };
 
-  localStorage.setItem("support_chat_username", username);
-
   try {
-    await registerUserPresence();
+    await registerCurrentUserPresence();
     showChat();
+    ensurePublicTabHandler();
     initRealtimeListeners();
-    switchConversation({
-      type: "publico",
-      threadId: "public-room",
-      title: "Sala pública"
-    });
+    switchConversation({ ...PUBLIC_CONVERSATION });
   } catch (error) {
     console.error("Erro ao entrar no chat:", error);
-    alert("Não foi possível entrar no chat. Verifique o Firebase config, as Rules e o Console.");
+    alert("Não foi possível entrar no chat.");
   }
 });
 
-function showChat() {
-  currentUserLabel.textContent = state.currentUser?.username || "-";
-  welcomeScreen.classList.add("hidden");
-  chatApp.classList.remove("hidden");
-}
+/* =====================================================
+   ENTRADA SUPORTE
+===================================================== */
+supportLoginForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
 
-function restoreSessionIfExists() {
-  const username = localStorage.getItem("support_chat_username");
-  if (!username) return;
+  const email = supportEmailInput.value.trim();
+  const password = supportPasswordInput.value;
 
-  const uid = generateUserId();
+  if (!email || !password) {
+    alert("Preencha email e senha.");
+    return;
+  }
 
-  state.currentUser = {
-    id: uid,
-    username,
-    role: "user",
-    status: "online"
-  };
+  try {
+    const result = await signInWithEmailAndPassword(auth, email, password);
+    const authEmail = result.user.email || "";
 
-  registerUserPresence()
-    .then(() => {
-      showChat();
-      initRealtimeListeners();
-      switchConversation({
-        type: "publico",
-        threadId: "public-room",
-        title: "Sala pública"
-      });
-    })
-    .catch((error) => {
-      console.error("Erro ao restaurar sessão:", error);
-    });
-}
+    if (authEmail.toLowerCase() !== SUPPORT_EMAIL.toLowerCase()) {
+      await signOut(auth);
+      alert("Este email não está autorizado para a conta de suporte.");
+      return;
+    }
+
+    state.currentUser = {
+      id: SUPPORT_USER.id,
+      username: SUPPORT_USER.username,
+      role: "support",
+      status: "online",
+      isSupportAuth: true,
+      authUid: result.user.uid,
+      email: authEmail
+    };
+
+    await registerCurrentUserPresence();
+    showChat();
+    ensurePublicTabHandler();
+    initRealtimeListeners();
+    switchConversation({ ...PUBLIC_CONVERSATION });
+  } catch (error) {
+    console.error("Erro no login do suporte:", error);
+    alert("Email ou senha inválidos para o suporte.");
+  }
+});
 
 /* =====================================================
    PRESENÇA
 ===================================================== */
-async function registerUserPresence() {
+async function registerCurrentUserPresence() {
   if (!state.currentUser) return;
 
-  const userRef = doc(db, "users", state.currentUser.id);
-
   await setDoc(
-    userRef,
+    doc(db, "users", state.currentUser.id),
     {
       username: state.currentUser.username,
       role: state.currentUser.role,
       status: "online",
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    },
-    { merge: true }
-  );
-
-  const momRef = doc(db, "users", SUPPORT_USER.id);
-  await setDoc(
-    momRef,
-    {
-      username: SUPPORT_USER.username,
-      role: SUPPORT_USER.role,
-      status: "online",
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
+      ...(state.currentUser.role === "support"
+        ? {
+            supportEmail: state.currentUser.email || SUPPORT_EMAIL
+          }
+        : {
+            createdAt: serverTimestamp()
+          })
     },
     { merge: true }
   );
@@ -350,7 +468,6 @@ function listenFriends() {
     }
 
     const friendDocs = snapshot.docs.map((d) => d.data());
-
     friendsList.className = "friends-list";
     friendsList.innerHTML = "";
 
@@ -385,22 +502,16 @@ function listenFriends() {
 }
 
 /* =====================================================
-   RENDER USUÁRIOS
+   USUÁRIOS
 ===================================================== */
 function renderUsers(users) {
   usersList.innerHTML = "";
+  onlineCount.textContent = users.filter((u) => u.status === "online").length;
 
-  const onlineUsersCount = users.filter((u) => u.status === "online").length;
-  onlineCount.textContent = onlineUsersCount;
-
-  const filtered = users
-    .filter((u) => u.id !== state.currentUser?.id)
-    .filter((u) => u.id !== SUPPORT_USER.id);
+  const filtered = users.filter((u) => u.id !== state.currentUser?.id);
 
   if (!filtered.length) {
-    usersList.innerHTML = `
-      <div class="empty-list">Nenhum outro usuário visível no momento.</div>
-    `;
+    usersList.innerHTML = `<div class="empty-list">Nenhum outro usuário visível no momento.</div>`;
     return;
   }
 
@@ -417,7 +528,11 @@ function renderUsers(users) {
     `;
 
     row.addEventListener("click", (event) => {
-      openUserMenu(event.clientX, event.clientY, user);
+      openUserMenu(event.clientX, event.clientY, {
+        id: user.id,
+        username: user.username,
+        role: user.role || "user"
+      });
     });
 
     usersList.appendChild(row);
@@ -427,39 +542,10 @@ function renderUsers(users) {
 /* =====================================================
    CONVERSAS
 ===================================================== */
-function createConversationTab({ type, threadId, title }) {
-  const exists = [...conversationTabs.querySelectorAll(".tab")].find(
-    (tab) => tab.dataset.threadId === threadId
-  );
-
-  if (exists) return;
-
-  const btn = document.createElement("button");
-  btn.className = "tab";
-  btn.dataset.conversationType = type;
-  btn.dataset.threadId = threadId;
-  btn.textContent = title;
-
-  btn.addEventListener("click", () => {
-    switchConversation({ type, threadId, title });
-  });
-
-  conversationTabs.appendChild(btn);
-}
-
-function activateConversationTab(threadId) {
-  [...conversationTabs.querySelectorAll(".tab")].forEach((tab) => {
-    tab.classList.toggle("active", tab.dataset.threadId === threadId);
-  });
-}
-
-function switchConversation({ type, threadId, title }) {
-  state.currentConversation = { type, threadId, title };
-  conversationTitle.textContent = title;
-  roomStatus.textContent =
-    type === "publico" ? "Sala pública ativa" : `Chat privado com ${title}`;
-
-  activateConversationTab(threadId);
+function switchConversation(conversation) {
+  state.currentConversation = { ...conversation };
+  setRoomHeader();
+  activateConversationTab(conversation.threadId);
   subscribeToMessages();
 }
 
@@ -487,34 +573,51 @@ function startPrivateChat(user) {
 /* =====================================================
    MENSAGENS
 ===================================================== */
+function getMessagesCollectionRef() {
+  if (state.currentConversation.type === "publico") {
+    return collection(db, "publicMessages", "public-room", "messages");
+  }
+
+  return collection(db, "privateThreads", state.currentConversation.threadId, "messages");
+}
+
 function subscribeToMessages() {
-  if (state.unsubscribeMessages) state.unsubscribeMessages();
+  if (state.unsubscribeMessages) {
+    state.unsubscribeMessages();
+    state.unsubscribeMessages = null;
+  }
 
-  setEmptyMessagesState();
+  const emptyState = getEmptyStateByConversation();
+  setEmptyMessagesState(emptyState.title, emptyState.text);
 
-  const msgsRef = collection(
-    db,
-    state.currentConversation.type === "publico" ? "publicMessages" : "privateThreads",
-    state.currentConversation.type === "publico" ? "public-room" : state.currentConversation.threadId,
-    "messages"
-  );
-
+  const msgsRef = getMessagesCollectionRef();
   const q = query(msgsRef, orderBy("createdAt", "asc"), limit(300));
 
-  state.unsubscribeMessages = onSnapshot(q, (snapshot) => {
-    if (snapshot.empty) {
-      setEmptyMessagesState();
-      return;
+  state.unsubscribeMessages = onSnapshot(
+    q,
+    (snapshot) => {
+      if (snapshot.empty) {
+        const stateText = getEmptyStateByConversation();
+        setEmptyMessagesState(stateText.title, stateText.text);
+        return;
+      }
+
+      messagesContainer.innerHTML = "";
+
+      snapshot.forEach((docItem) => {
+        renderMessage(docItem.data());
+      });
+
+      scrollMessagesToBottom();
+    },
+    (error) => {
+      console.error("Erro ao carregar mensagens:", error);
+      setEmptyMessagesState(
+        "Erro ao carregar mensagens",
+        "Confira as rules do Firestore e a configuração do projeto."
+      );
     }
-
-    messagesContainer.innerHTML = "";
-
-    snapshot.forEach((docItem) => {
-      renderMessage(docItem.data());
-    });
-
-    scrollMessagesToBottom();
-  });
+  );
 }
 
 function renderMessage(msg) {
@@ -583,16 +686,13 @@ messageForm.addEventListener("submit", async (e) => {
 ===================================================== */
 async function addFriend(user) {
   if (!state.currentUser || !user?.id) return;
-
   if (user.id === state.currentUser.id) {
     alert("Você não pode adicionar você mesma.");
     return;
   }
 
-  const docId = `${state.currentUser.id}__${user.id}`;
-
   try {
-    await setDoc(doc(db, "friendships", docId), {
+    await setDoc(doc(db, "friendships", `${state.currentUser.id}__${user.id}`), {
       ownerId: state.currentUser.id,
       friendId: user.id,
       createdAt: serverTimestamp()
@@ -609,10 +709,8 @@ async function addFriend(user) {
 async function removeFriend(user) {
   if (!state.currentUser || !user?.id) return;
 
-  const docId = `${state.currentUser.id}__${user.id}`;
-
   try {
-    await deleteDoc(doc(db, "friendships", docId));
+    await deleteDoc(doc(db, "friendships", `${state.currentUser.id}__${user.id}`));
     alert(`${user.username} foi removido(a) dos amigos.`);
     closeAllMenus();
   } catch (error) {
@@ -622,7 +720,7 @@ async function removeFriend(user) {
 }
 
 /* =====================================================
-   MENUS DE AÇÃO
+   MENUS
 ===================================================== */
 momActionBtn.addEventListener("click", (event) => {
   event.stopPropagation();
@@ -657,19 +755,17 @@ removeFriendBtn.addEventListener("click", async () => {
 });
 
 document.addEventListener("click", (event) => {
-  const clickedInsideMenu =
+  const inside =
     event.target.closest(".context-menu") ||
     event.target.closest(".user-row") ||
     event.target.closest(".friend-row") ||
     event.target.closest("#momCard");
 
-  if (!clickedInsideMenu) {
-    closeAllMenus();
-  }
+  if (!inside) closeAllMenus();
 });
 
 /* =====================================================
-   TABS LATERAIS
+   SIDEBAR
 ===================================================== */
 sideTabs.forEach((tab) => {
   tab.addEventListener("click", () => {
@@ -682,9 +778,6 @@ sideTabs.forEach((tab) => {
   });
 });
 
-/* =====================================================
-   MOBILE
-===================================================== */
 mobileSidebarToggle.addEventListener("click", () => {
   sidebar.classList.add("open");
   mobileSidebarOverlay.classList.remove("hidden");
@@ -708,6 +801,39 @@ messageInput.addEventListener("keydown", (e) => {
 });
 
 /* =====================================================
+   LOGOUT
+===================================================== */
+logoutBtn.addEventListener("click", async () => {
+  try {
+    if (state.currentUser?.id) {
+      await updateDoc(doc(db, "users", state.currentUser.id), {
+        status: "offline",
+        updatedAt: serverTimestamp()
+      });
+    }
+  } catch (_) {}
+
+  try {
+    if (state.currentUser?.isSupportAuth) {
+      await signOut(auth);
+    }
+  } catch (_) {}
+
+  cleanupRealtimeListeners();
+  state.currentUser = null;
+  state.currentConversation = { ...PUBLIC_CONVERSATION };
+  closeAllMenus();
+  resetAppStateUi();
+
+  usernameInput.value = "";
+  supportEmailInput.value = "";
+  supportPasswordInput.value = "";
+  setMode("client");
+  showWelcome();
+});
+
+/* =====================================================
    INÍCIO
 ===================================================== */
-restoreSessionIfExists();
+ensurePublicTabHandler();
+setMode("client");
