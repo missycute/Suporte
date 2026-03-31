@@ -2,7 +2,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/fireba
 import {
   getAuth,
   signInWithEmailAndPassword,
-  signOut
+  signOut,
+  signInAnonymously
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import {
   getFirestore,
@@ -34,11 +35,8 @@ const firebaseConfig = {
   measurementId: "G-HBK54RTTMN"
 };
 
-// Initialize Firebase
-
 /* =====================================================
-   EMAIL REAL DA SUA MÃE
-   coloque exatamente o mesmo email criado no Authentication
+   EMAIL DO SUPORTE
 ===================================================== */
 const SUPPORT_EMAIL = "cleanpro2507@gmail.com";
 
@@ -123,10 +121,6 @@ const mobileSidebarOverlay = document.getElementById("mobileSidebarOverlay");
 ===================================================== */
 function sanitizeUsername(name) {
   return name.trim().replace(/\s+/g, " ").replace(/[<>]/g, "").slice(0, 24);
-}
-
-function generateUserId() {
-  return `u_${crypto.randomUUID()}`;
 }
 
 function getInitials(name) {
@@ -285,9 +279,14 @@ function resetAppStateUi() {
     if (index > 0) tab.remove();
   });
 
-  switchConversation({ ...PUBLIC_CONVERSATION });
+  state.currentConversation = { ...PUBLIC_CONVERSATION };
+  activateConversationTab(PUBLIC_CONVERSATION.threadId);
+  setRoomHeader();
   messagesContainer.innerHTML = "";
-  setEmptyMessagesState("Nenhuma mensagem ainda", "Quando alguém enviar algo, as mensagens aparecerão aqui em tempo real.");
+  setEmptyMessagesState(
+    "Nenhuma mensagem ainda",
+    "Quando alguém enviar algo, as mensagens aparecerão aqui em tempo real."
+  );
 }
 
 function cleanupRealtimeListeners() {
@@ -324,23 +323,25 @@ usernameForm.addEventListener("submit", async (e) => {
     return;
   }
 
-  state.currentUser = {
-    id: generateUserId(),
-    username,
-    role: "user",
-    status: "online",
-    isSupportAuth: false
-  };
-
   try {
+    const authResult = await signInAnonymously(auth);
+
+    state.currentUser = {
+      id: authResult.user.uid,
+      username,
+      role: "user",
+      status: "online",
+      isSupportAuth: false
+    };
+
     await registerCurrentUserPresence();
     showChat();
     ensurePublicTabHandler();
     initRealtimeListeners();
     switchConversation({ ...PUBLIC_CONVERSATION });
   } catch (error) {
-    console.error("Erro ao entrar no chat:", error);
-    alert("Não foi possível entrar no chat.");
+    console.error("Erro ao entrar no chat:", error.code, error.message, error);
+    alert(`Não foi possível entrar no chat: ${error.code || "erro-desconhecido"}`);
   }
 });
 
@@ -384,8 +385,8 @@ supportLoginForm.addEventListener("submit", async (e) => {
     initRealtimeListeners();
     switchConversation({ ...PUBLIC_CONVERSATION });
   } catch (error) {
-    console.error("Erro no login do suporte:", error);
-    alert("Email ou senha inválidos para o suporte.");
+    console.error("Erro no login do suporte:", error.code, error.message, error);
+    alert(`Erro do suporte: ${error.code || "erro-desconhecido"}`);
   }
 });
 
@@ -476,6 +477,7 @@ function listenFriends() {
       if (!userSnap.exists()) continue;
 
       const data = userSnap.data();
+      if (data.status !== "online") continue;
 
       const row = document.createElement("div");
       row.className = "friend-row";
@@ -483,9 +485,9 @@ function listenFriends() {
         <div class="friend-avatar">${getInitials(data.username)}</div>
         <div class="friend-info">
           <strong>${escapeHtml(data.username)}</strong>
-          <span>${data.status === "online" ? "Online" : "Offline"}</span>
+          <span>Online agora</span>
         </div>
-        <div class="user-status" style="opacity:${data.status === "online" ? "1" : "0.35"}"></div>
+        <div class="user-status"></div>
       `;
 
       row.addEventListener("click", (event) => {
@@ -498,6 +500,11 @@ function listenFriends() {
 
       friendsList.appendChild(row);
     }
+
+    if (!friendsList.innerHTML.trim()) {
+      friendsList.className = "friends-list empty-list";
+      friendsList.textContent = "Nenhum amigo online no momento.";
+    }
   });
 }
 
@@ -506,12 +513,19 @@ function listenFriends() {
 ===================================================== */
 function renderUsers(users) {
   usersList.innerHTML = "";
-  onlineCount.textContent = users.filter((u) => u.status === "online").length;
 
-  const filtered = users.filter((u) => u.id !== state.currentUser?.id);
+  const onlineUsers = users.filter(
+    (u) => u.status === "online" && u.id !== "mom-support"
+  );
+
+  onlineCount.textContent = onlineUsers.length;
+
+  const filtered = onlineUsers.filter((u) => u.id !== state.currentUser?.id);
 
   if (!filtered.length) {
-    usersList.innerHTML = `<div class="empty-list">Nenhum outro usuário visível no momento.</div>`;
+    usersList.innerHTML = `
+      <div class="empty-list">Nenhum outro usuário online no momento.</div>
+    `;
     return;
   }
 
@@ -522,9 +536,9 @@ function renderUsers(users) {
       <div class="user-avatar">${getInitials(user.username)}</div>
       <div class="user-info">
         <strong>${escapeHtml(user.username)}</strong>
-        <span>${user.status === "online" ? "Online agora" : "Offline"}</span>
+        <span>Online agora</span>
       </div>
-      <div class="user-status" style="opacity:${user.status === "online" ? "1" : "0.35"}"></div>
+      <div class="user-status"></div>
     `;
 
     row.addEventListener("click", (event) => {
@@ -676,8 +690,8 @@ messageForm.addEventListener("submit", async (e) => {
     messageInput.value = "";
     autoResizeTextarea();
   } catch (error) {
-    console.error("Erro ao enviar mensagem:", error);
-    alert("Não foi possível enviar a mensagem.");
+    console.error("Erro ao enviar mensagem:", error.code, error.message, error);
+    alert(`Não foi possível enviar a mensagem: ${error.code || "erro-desconhecido"}`);
   }
 });
 
@@ -701,7 +715,7 @@ async function addFriend(user) {
     alert(`${user.username} foi adicionado(a) aos seus amigos.`);
     closeAllMenus();
   } catch (error) {
-    console.error("Erro ao adicionar amigo:", error);
+    console.error("Erro ao adicionar amigo:", error.code, error.message, error);
     alert("Não foi possível adicionar aos amigos.");
   }
 }
@@ -714,7 +728,7 @@ async function removeFriend(user) {
     alert(`${user.username} foi removido(a) dos amigos.`);
     closeAllMenus();
   } catch (error) {
-    console.error("Erro ao remover amigo:", error);
+    console.error("Erro ao remover amigo:", error.code, error.message, error);
     alert("Não foi possível remover dos amigos.");
   }
 }
@@ -814,14 +828,11 @@ logoutBtn.addEventListener("click", async () => {
   } catch (_) {}
 
   try {
-    if (state.currentUser?.isSupportAuth) {
-      await signOut(auth);
-    }
+    await signOut(auth);
   } catch (_) {}
 
   cleanupRealtimeListeners();
   state.currentUser = null;
-  state.currentConversation = { ...PUBLIC_CONVERSATION };
   closeAllMenus();
   resetAppStateUi();
 
